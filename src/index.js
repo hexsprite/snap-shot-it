@@ -8,6 +8,8 @@ const { isNamedSnapshotArguments } = require('./named-snapshots')
 const R = require('ramda')
 const { hasOnly, hasFailed } = require('has-only')
 const pluralize = require('pluralize')
+const path = require('path')
+const stackTrace = require('stacktrace-js')
 
 debug('loading snap-shot-it')
 const EXTENSION = '.js'
@@ -77,8 +79,9 @@ global.beforeEach(function () {
 
 global.beforeEach(function () {
   /* eslint-disable immutable/no-this */
-  if (this.currentTest) {
-    setTest(this.currentTest)
+  const currentTest = this.currentTest || this.ctx.currentTest
+  if (currentTest) {
+    setTest(currentTest)
   }
   /* eslint-enable immutable/no-this */
 })
@@ -89,10 +92,15 @@ function snapshot (value) {
   if (!currentTest) {
     throw new Error('Missing current test, cannot make snapshot')
   }
-
+  // eslint-disable-next-line immutable/no-let
+  let filename = stackTrace.getSync()[1].fileName
+  filename = `${process.env['INIT_CWD']}/${filename}`
+  process.chdir(path.dirname(filename))
+  // eslint-disable-next-line immutable/no-mutation
+  currentTest.file = filename
   const fullTitle = getTestTitle(currentTest)
   debug('snapshot in test "%s"', fullTitle)
-  debug('from file "%s"', currentTest.file)
+  debug('from file "%s"', filename)
 
   // eslint-disable-next-line immutable/no-let
   let savedTestTitle = fullTitle
@@ -110,7 +118,7 @@ function snapshot (value) {
     value = arguments[1]
     debug('named snapshots "%s"', savedTestTitle)
     addToPrune({
-      file: currentTest.file,
+      file: filename,
       specName: savedTestTitle
     })
   } else {
@@ -126,7 +134,7 @@ function snapshot (value) {
   }
   const snap = {
     what: value,
-    file: currentTest.file,
+    file: filename,
     ext: EXTENSION,
     compare,
     opts
