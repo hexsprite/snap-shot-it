@@ -51,7 +51,7 @@ const getTestTitle = test => test.fullTitle().trim()
 
 const getTestInfo = test => {
   return {
-    file: test.file,
+    file: fullFilename || test.file,
     specName: getTestTitle(test)
   }
 }
@@ -87,6 +87,24 @@ global.beforeEach(function () {
 })
 
 global.afterEach(clearCurrentTest)
+
+// eslint-disable-next-line immutable/no-let
+let fullFilename
+/* eslint-disable immutable/no-mutation */
+const originalIt = global.it
+global.it = function () {
+  fullFilename = `${process.env['INIT_CWD']}/${
+    stackTrace.getSync()[1].fileName
+  }`
+  if (currentTest) {
+    currentTest.file = fullFilename
+  }
+  // eslint-disable-next-line immutable/no-this
+  return originalIt.apply(this, arguments)
+}
+global.it.skip = originalIt.skip
+global.it.only = originalIt.only
+/* eslint-enable immutable/no-mutation */
 
 function snapshot (value) {
   if (!currentTest) {
