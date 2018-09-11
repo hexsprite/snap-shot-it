@@ -106,7 +106,7 @@ global.it.skip = originalIt.skip
 global.it.only = originalIt.only
 /* eslint-enable immutable/no-mutation */
 
-function snapshot (value) {
+function snapshot (value, updateNow) {
   if (!currentTest) {
     throw new Error('Missing current test, cannot make snapshot')
   }
@@ -147,7 +147,7 @@ function snapshot (value) {
   const opts = {
     show: Boolean(process.env.SNAPSHOT_SHOW),
     dryRun: Boolean(process.env.SNAPSHOT_DRY),
-    update: Boolean(process.env.SNAPSHOT_UPDATE),
+    update: updateNow || Boolean(process.env.SNAPSHOT_UPDATE),
     ci: Boolean(process.env.CI)
   }
   const snap = {
