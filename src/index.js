@@ -1,147 +1,145 @@
-'use strict'
+"use strict";
 
-const debug = require('debug')('snap-shot-it')
-const { core, restore, prune } = require('snap-shot-core')
-const compare = require('snap-shot-compare')
-const { isDataDriven, dataDriven } = require('@bahmutov/data-driven')
-const { isNamedSnapshotArguments } = require('./named-snapshots')
-const R = require('ramda')
-const { hasOnly, hasFailed } = require('has-only')
-const pluralize = require('pluralize')
-const path = require('path')
-const stackTrace = require('stacktrace-js')
+const debug = require("debug")("snap-shot-it");
+const { core, restore, prune } = require("snap-shot-core");
+const compare = require("snap-shot-compare");
+const { isDataDriven, dataDriven } = require("@bahmutov/data-driven");
+const { isNamedSnapshotArguments } = require("./named-snapshots");
+const R = require("ramda");
+const { hasOnly, hasFailed } = require("has-only");
+const pluralize = require("pluralize");
+const path = require("path");
+const stackTrace = require("stacktrace-js");
 
-debug('loading snap-shot-it')
-const EXTENSION = '.js'
+debug("loading snap-shot-it");
+const EXTENSION = ".js";
 
 // all tests we have seen so we can prune later
-const seenSpecs = []
-function _pruneSnapshots () {
-  debug('pruning snapshots')
-  debug('seen %s', pluralize('spec', seenSpecs.length, true))
-  debug(seenSpecs)
-  prune({ tests: seenSpecs, ext: EXTENSION })
+const seenSpecs = [];
+function _pruneSnapshots() {
+  debug("pruning snapshots");
+  debug("seen %s", pluralize("spec", seenSpecs.length, true));
+  debug(seenSpecs);
+  prune({ tests: seenSpecs, ext: EXTENSION });
 
   // eslint-disable-next-line immutable/no-mutation
-  seenSpecs.length = 0
+  seenSpecs.length = 0;
 }
 
 // eslint-disable-next-line immutable/no-let
-let pruneSnapshots
+let pruneSnapshots;
 
-function addToPrune (info) {
+function addToPrune(info) {
   // do not add if previous info is the same
   if (R.equals(R.last(seenSpecs), info)) {
-    return
+    return;
   }
-  seenSpecs.push(info)
+  seenSpecs.push(info);
 }
 
 // eslint-disable-next-line immutable/no-let
-let currentTest
+let currentTest;
 
-function setTest (t) {
+function setTest(t) {
   if (!t) {
-    throw new Error('Expected test object')
+    throw new Error("Expected test object");
   }
-  currentTest = t
+  currentTest = t;
 }
 
-const getTestTitle = test => test.fullTitle().trim()
+const getTestTitle = test => test.fullTitle().trim();
 
 const getTestInfo = test => {
   return {
     file: fullFilename || test.file,
     specName: getTestTitle(test)
-  }
-}
+  };
+};
 
-function clearCurrentTest () {
+function clearCurrentTest() {
   if (currentTest) {
-    const fullTitle = getTestTitle(currentTest)
-    debug('clearing current test "%s"', fullTitle)
-    restore(getTestInfo(currentTest))
-    currentTest = null
+    const fullTitle = getTestTitle(currentTest);
+    debug('clearing current test "%s"', fullTitle);
+    restore(getTestInfo(currentTest));
+    currentTest = null;
   }
 }
 
-global.beforeEach(function () {
+global.beforeEach(function() {
   /* eslint-disable immutable/no-this */
   if (hasOnly(this)) {
-    debug('skip pruning snapshots because found .only')
-    pruneSnapshots = function noop () {}
+    debug("skip pruning snapshots because found .only");
+    pruneSnapshots = function noop() {};
   } else {
-    debug('will prune snapshots because no .only')
-    pruneSnapshots = _pruneSnapshots
+    debug("will prune snapshots because no .only");
+    pruneSnapshots = _pruneSnapshots;
   }
   /* eslint-enable immutable/no-this */
-})
+});
 
-global.beforeEach(function () {
+global.beforeEach(function() {
   /* eslint-disable immutable/no-this */
-  const currentTest = this.currentTest || this.ctx.currentTest
+  const currentTest = this.currentTest || this.ctx.currentTest;
   if (currentTest) {
-    setTest(currentTest)
+    setTest(currentTest);
   }
   /* eslint-enable immutable/no-this */
-})
+});
 
-global.afterEach(clearCurrentTest)
+global.afterEach(clearCurrentTest);
 
 // eslint-disable-next-line immutable/no-let
-let fullFilename
+let fullFilename;
 /* eslint-disable immutable/no-mutation */
-const originalIt = global.it
-global.it = function () {
-  fullFilename = `${process.env['INIT_CWD']}/${
-    stackTrace.getSync()[1].fileName
-  }`
+const originalIt = global.it;
+global.it = function() {
+  fullFilename = `${process.env.PWD}/${stackTrace.getSync()[1].fileName}`;
   if (currentTest) {
-    currentTest.file = fullFilename
+    currentTest.file = fullFilename;
   }
   // eslint-disable-next-line immutable/no-this
-  return originalIt.apply(this, arguments)
-}
-global.it.skip = originalIt.skip
-global.it.only = originalIt.only
+  return originalIt.apply(this, arguments);
+};
+global.it.skip = originalIt.skip;
+global.it.only = originalIt.only;
 /* eslint-enable immutable/no-mutation */
 
 function snapshot (value, updateNow) {
   if (!currentTest) {
-    throw new Error('Missing current test, cannot make snapshot')
+    throw new Error("Missing current test, cannot make snapshot");
   }
   // eslint-disable-next-line immutable/no-let
-  let filename = stackTrace.getSync()[1].fileName
-  filename = `${process.env['INIT_CWD']}/${filename}`
-  process.chdir(path.dirname(filename))
+  let filename = stackTrace.getSync()[1].fileName;
+  filename = `${process.env.PWD}/${filename}`;
+  process.chdir(path.dirname(filename));
   // eslint-disable-next-line immutable/no-mutation
-  currentTest.file = filename
-  const fullTitle = getTestTitle(currentTest)
-  debug('snapshot in test "%s"', fullTitle)
-  debug('from file "%s"', filename)
+  currentTest.file = filename;
+  const fullTitle = getTestTitle(currentTest);
+  debug('snapshot in test "%s"', fullTitle);
+  debug('from file "%s"', filename);
 
   // eslint-disable-next-line immutable/no-let
-  let savedTestTitle = fullTitle
+  let savedTestTitle = fullTitle;
 
   if (isDataDriven(arguments)) {
     // value is a function
-    debug('data-driven test for %s', value.name)
-    value = dataDriven(value, Array.from(arguments).slice(1))
-    savedTestTitle += ' ' + value.name
-    debug('extended save name to include function name')
-    debug('snapshot name "%s"', savedTestTitle)
-    addToPrune(getTestInfo(currentTest))
+    debug("data-driven test for %s", value.name);
+    value = dataDriven(value, Array.from(arguments).slice(1));
+    savedTestTitle += " " + value.name;
+    debug("extended save name to include function name");
+    debug('snapshot name "%s"', savedTestTitle);
+    addToPrune(getTestInfo(currentTest));
   } else if (isNamedSnapshotArguments(arguments)) {
-    savedTestTitle = arguments[0]
-    value = arguments[1]
-    debug('named snapshots "%s"', savedTestTitle)
+    savedTestTitle = arguments[0];
+    value = arguments[1];
+    debug('named snapshots "%s"', savedTestTitle);
     addToPrune({
       file: filename,
       specName: savedTestTitle
-    })
+    });
   } else {
-    debug('snapshot value %j', value)
-    addToPrune(getTestInfo(currentTest))
+    debug("snapshot value %j", value);
+    addToPrune(getTestInfo(currentTest));
   }
 
   const opts = {
@@ -149,45 +147,45 @@ function snapshot (value, updateNow) {
     dryRun: Boolean(process.env.SNAPSHOT_DRY),
     update: updateNow || Boolean(process.env.SNAPSHOT_UPDATE),
     ci: Boolean(process.env.CI)
-  }
+  };
   const snap = {
     what: value,
     file: filename,
     ext: EXTENSION,
     compare,
     opts
-  }
+  };
 
   if (isNamedSnapshotArguments(arguments)) {
     // eslint-disable-next-line immutable/no-mutation
-    snap.exactSpecName = savedTestTitle
+    snap.exactSpecName = savedTestTitle;
   } else {
     // eslint-disable-next-line immutable/no-mutation
-    snap.specName = savedTestTitle
+    snap.specName = savedTestTitle;
   }
 
-  return core(snap)
+  return core(snap);
 }
 
 /* eslint-disable immutable/no-mutation */
-module.exports = snapshot
+module.exports = snapshot;
 /* eslint-enable immutable/no-mutation */
 
-global.after(function () {
+global.after(function() {
   /* eslint-disable immutable/no-this */
   if (!hasFailed(this)) {
-    debug('the test run was a success')
-    pruneSnapshots.call(this)
+    debug("the test run was a success");
+    pruneSnapshots.call(this);
   } else {
-    debug('not attempting to prune snapshots because the test run has failed')
+    debug("not attempting to prune snapshots because the test run has failed");
   }
   /* eslint-enable immutable/no-this */
-})
+});
 
-function deleteFromCache () {
+function deleteFromCache() {
   // to work with transpiled code, need to force
   // re-evaluating this module again on watch
-  debug('deleting snap-shot-it from cache')
-  delete require.cache[__filename]
+  debug("deleting snap-shot-it from cache");
+  delete require.cache[__filename];
 }
-global.after(deleteFromCache)
+global.after(deleteFromCache);
